@@ -28,7 +28,10 @@ import json
 import urllib3
 import requests
 
-# User variables (changeable), do not change any other varibles you see
+#
+# User variables
+#
+
 opnsenseURL = "https://127.0.0.1" # connect to webui via local loopback, if you use a different port for webui add ":8443" for example
 opnsenseKey = ""
 opnsenseSecret = ""
@@ -42,7 +45,9 @@ piaPortForward = False # Only enable this if you know what you are doing
 
 urlVerify = False # As we're connecting via local loopback I guess we don't really need to check the certificate. (I've noticed alot of people have the default self sigend anyway)
 
-# end of User variables
+#
+# end of User variables, do not edit anything after this point
+#
 
 #
 # Script Start
@@ -50,7 +55,7 @@ urlVerify = False # As we're connecting via local loopback I guess we don't real
 
 opnsenseWGUUID = ""
 opnsenseWGPubkey = ""
-opnsenseWGIP = "10.0.0.2"
+opnsenseWGIP = "192.0.0.2"
 opnsenseWGGateway = "192.0.0.1"
 opnsenseWGInstance = ""
 opnsenseWGPeerName = f"{opnsenseWGName}-Server"
@@ -68,7 +73,7 @@ piaPort = ''
 piaPortSignature = ''
 
 serverChange = False
-
+listRegions = False
 debugMode = False
 
 # Disable HTTPS verify warnings when Verify turned off
@@ -79,6 +84,8 @@ if len(sys.argv) > 1:
     for arg in sys.argv:
         if arg.lower() == "debug":
             debugMode = True
+        if arg.lower() == "listregions":
+            listRegions = True
         if arg.lower() == "changeserver":
             serverChange = True
 
@@ -117,6 +124,41 @@ def printDebug(text):
 #
 # Script logic
 #
+
+# Check if user wanted to list regions, and if so display them
+if listRegions:
+    r = requests.get(piaServerList)
+    if r.status_code != 200:
+        print("Failed to get PIA server list, url is returning non 200 HTTP code, is there a connectivity issue?")
+        sys.exit(2)
+    piaRegions = json.loads(r.text.split('\n')[0])['regions']
+    regionList = list()
+    for region in piaRegions:
+        regionList.append(region['name']+" | ID: "+region['id'] + " | Port forwarding: " + str(region['port_forward']) + " | Geo-located: " + str(region['geo']))
+    regionList.sort() # Now we sort the list as PIA's payload isn't in region name order.
+    for region in regionList:
+        print(region)
+    print("* Geo-located means these servers is not physically located in the region where the exit node is located. " +
+    "The implementation of geo-located servers has provided us VPN services in countries where service may not have been " +
+    "previously available due to restrictions, government legislation, or a lack of secure server providers")
+    # ^ Info from https://www.privateinternetaccess.com/helpdesk/kb/articles/geo-located-servers-we-offer
+    sys.exit(0)
+
+if opnsenseKey == '':
+    print("Please define opnsenseKey variable with the correct value")
+    sys.exit(0)
+
+if opnsenseSecret == '':
+    print("Please define opnsenseSecret variable with the correct value")
+    sys.exit(0)
+
+if piaUsername == '':
+    print("Please define piaUsername variable with the correct value")
+    sys.exit(0)
+
+if piaPassword == '':
+    print("Please define piaPassword variable with the correct value")
+    sys.exit(0)
 
 # List current wireguard instances looking for PIA one
 r = requests.get(f'{opnsenseURL}/api/wireguard/server/searchServer/', auth=(opnsenseKey, opnsenseSecret), verify=urlVerify)
@@ -293,6 +335,9 @@ if os.path.isfile(dynamticGatewayFile) is False:
 if serverChange:
     # Get PIA Server List
     r = requests.get(piaServerList)
+    if r.status_code != 200:
+        print("Failed to get PIA server list, url is returning non 200 HTTP code, is there a connectivity issue?")
+        sys.exit(2)
     serverList = json.loads(r.text.split('\n')[0])
 
     # Look for a pia server in the region we want.
@@ -343,7 +388,7 @@ if serverChange:
     printDebug(wireguardResponse.text)
 
 
-    # Write wiregaurd connection information to file, for later use.
+    # Write wireguard connection information to file, for later use.
     # we need to add server name as well
     wireguardServerInfo['server_name'] = wantedRegion['servers']['wg'][0]['cn']
     wireguardServerInfo['servermeta_ip'] = wantedRegion['servers']['meta'][0]['ip']
